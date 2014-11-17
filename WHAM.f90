@@ -3,10 +3,10 @@
 ! and temperature replica exchange molecular dynamics simualtion                              !
 ! Written by                                                                                  !
 !                                        Ye Mei                                               !
-!                                      10/17/2014                                             !
+!                                      11/17/2014                                             !
 !                           East China Normal University                                      !
 ! Reference:                                                                                  !
-!      J. Phys. Chem. B, 109, 6722-6731 (2005)                                                !
+!      J. Comput. Chem. 33, 453-465 (2012)                                                    !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  
 module WHAM
   use precision_m
