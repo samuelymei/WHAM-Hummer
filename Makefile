@@ -1,5 +1,5 @@
 .SUFFIXES: 
-.SUFFIXES: .f90 .o
+.SUFFIXES: .f .f90 .o
 
 FC = ifort
 FFLAGS = -CB
@@ -15,8 +15,11 @@ OBJS = precision_m.o lib.o constant.o snapshot.o bin.o react_coord_bin.o simulat
 all:	${EXE}
 
 
-$(EXE):$(OBJS) ${MODULES}
-	$(FC) -o $@ $(FFLAGS) $(OBJS) $(LIBS)
+$(EXE):$(OBJS) ${MODULES} lbfgs.o
+	$(FC) -o $@ $(FFLAGS) $(OBJS) lbfgs.o $(LIBS)
+
+lbfgs.o:lbfgs.f
+	$(FC) -c $(FFLAGS) $(INCLUDE) $<
 
 %.o %.mod:%.f90
 	$(FC) -c $(FFLAGS) $(INCLUDE) $<
@@ -24,8 +27,8 @@ $(EXE):$(OBJS) ${MODULES}
 include .depend
 
 depend .depend:
-	makedepf90 *.f90 > .depend
+	makedepf90 *.f90 *.f > .depend
 
 clean:
-	/bin/rm -f $(EXE) $(OBJS) ${MODULES}
+	/bin/rm -f $(EXE) $(OBJS) ${MODULES} lbfgs.o
 

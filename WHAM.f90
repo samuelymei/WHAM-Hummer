@@ -65,66 +65,134 @@ contains
   subroutine iteration
     use constant, only : kB
     implicit none
-    real(kind=fp_kind) :: numerator(NumB), denominator(NumB)
-    real(kind=fp_kind) :: freeenergyMin
-    real(kind=fp_kind) :: unbiasedDensityRMSD
-    real(kind=fp_kind) :: unbiasedDensityOld(NumB)
-    real(kind=fp_kind) :: sumOfUnbiasedDensity
-    real(kind=fp_kind) :: freeenergy(NumW)
     integer(kind=4) :: iIteration
-    logical :: converged
-    real(kind=fp_kind) :: rmsd
-    real(kind=fp_kind) :: logUnbiasedDensity(NumB)
-    allocate(unbiasedDensity(NumB))
-    freeenergy = 1.d0   ! assign an initial guess of the free energy
-    unbiasedDensity = 1.d0/NumB
-    converged = .false.
+    real(kind=fp_kind) :: deltaG(NumB)
+    real(kind=fp_kind) :: aCap
+    real(kind=fp_kind) :: dAcapdDeltaG(NumB)
+    real(kind=fp_kind) :: eps, xtol
+    integer(kind=4) :: iprint(2)
+    integer(kind=4) :: iflag
+    logical :: diagco
+    real(kind=fp_kind) :: DIAG(NumW)
+    integer(kind=4), parameter :: Mcorrection = 5
+    real(kind=fp_kind) :: w((NumW+1)*(2*Mcorrection+1))
+    external LB2
+    diagco = .false.
+    iprint(1) = 1
+    iprint(2) = 0
+    eps = 1.0D-4
+    xtoL = 1.D-8
+    iflag = 0
+    deltaG = 0.d0
+    do iIteration = 1, MaxITS
+      print*,'Iteration', iIteration
+      call AofDeltaG( deltaG, aCap, dAcapdDeltaG )
+      print*, 'aCap=', aCap
+      print*, dAcapdDeltaG
+      call LBFGS(NumW, Mcorrection, deltaG, aCap, dAcapdDeltaG, diagco, diag, iprint, eps, xtoL, w, iflag)
+      if(iflag<=0)exit
+      if(iIteration == MaxITS)print*,'Max number of iterations has been reached'
+    end do
+    call writedensity(deltaG)
+  end subroutine iteration
+
+  subroutine AofDeltaG( deltaG, aCap, dAcapdDeltaG )
+    implicit none
+    real(kind=fp_kind), intent(in) :: deltaG(NumW)
+    real(kind=fp_kind), intent(out) :: aCap, dAcapdDeltaG(NumW)
+    integer(kind=4) :: indexB, indexW
+    integer(kind=4) :: indexW2
+    integer(kind=4) :: totalHistogram(NumB)
+    real(kind=fp_kind) :: g(NumW)
+    real(kind=fp_kind) :: denominator(NumB)
+    real(kind=fp_kind) :: sumOfFraction
+
+    g(1) = 0.d0
+    do indexB = 2, NumB
+      g(indexB) = g(indexB-1) + deltaG(indexB-1)
+    end do 
+
+    totalHistogram = 0 
+    do indexB = 1, NumB
+      do indexW = 1, NumW
+        totalHistogram(indexB) = totalHistogram(indexB) & 
+                             & + simulations(indexW)%bins(indexB)%histogram
+      end do
+    end do
+
+    denominator = 0.d0
+    do indexB = 1, NumB
+      do indexW = 1, NumW
+        denominator(indexB) = denominator(indexB) + &
+                            & simulations(indexW)%nEffectivenSnapshots * &
+                            & simulations(indexW)%bins(indexB)%biasingFactor * exp(g(indexW))
+      end do
+    end do
+
+    aCap = 0.d0
+    do indexW = 2, NumW
+      aCap = aCap - simulations(indexW)%nEffectivenSnapshots * g(indexW)
+    end do
 
     do indexB = 1, NumB
-      numerator(indexB) = 0.d0
-      do indexW = 1, nSimulation
-        numerator(indexB) = numerator(indexB) + & 
-           & simulations(indexW)%bins(indexB)%histogram
-      end do
+      aCap = aCap - totalHistogram(indexB) * &
+                & log( totalHistogram(indexB)/denominator(indexB) )
     end do
-
-    do iIteration = 1, MAXITS
-       unbiasedDensityOld = unbiasedDensity
-      do indexB = 1, NumB
-        denominator(indexB) = 0.d0
-        do indexW = 1, nSimulation
-          denominator(indexB) = denominator(indexB) + &
-             & simulations(indexW)%nEffectivenSnapshots * freeenergy(indexW) * &
-             & simulations(indexW)%bins(indexB)%biasingFactor
-        end do
-      end do
-      unbiasedDensity = numerator / denominator
- 
-      sumOfUnbiasedDensity = sum(unbiasedDensity)
-      unbiasedDensity = unbiasedDensity / sumOfUnbiasedDensity
-
-      freeenergy = 0.d0
-      do indexW = 1, nSimulation
+    
+    dAcapdDeltaG = 0.d0
+    do indexW = 1, NumW
+      do indexW2 = indexW + 1, NumW
+        sumOfFraction = 0.d0
         do indexB = 1, NumB
-          freeenergy(indexW) = freeenergy(indexW) + &
-            & simulations(indexW)%bins(indexB)%biasingFactor * unbiasedDensity(indexB)
-        end do    
+          sumOfFraction = sumOfFraction + &
+              & totalHistogram(indexB)*simulations(indexW2)%bins(indexB)%biasingFactor/denominator(indexB)
+        end do
+        dAcapdDeltaG(indexW) = dAcapdDeltaG(indexW) + &
+          & simulations(indexW2)%nEffectivenSnapshots * ( exp(g(indexW2)) * sumOfFraction - 1.d0 )
       end do
-      freeenergy = 1.d0 / freeenergy
-
-      unbiasedDensityRMSD = rmsd(NumB, unbiasedDensity, unbiasedDensityOld)
-      write(6,'(A,1X,I4,A,E12.4)')'Iteration ', iIteration, ': RMSD of unbiased density:', unbiasedDensityRMSD
-
-      if( unbiasedDensityRMSD < TOLERANCE ) converged = .true.
-      if( converged ) then
-        logUnbiasedDensity = - kB * T_target * log(unbiasedDensity)
-        logUnbiasedDensity = logUnbiasedDensity - minval(logUnbiasedDensity)
-        write(99,'(2F10.4)')(reactCoordBin(indexB, 1)%binRC, logUnbiasedDensity(indexB), indexB = 1, NumB)
-        exit
-      end if
-      if ( iIteration == MAXITS ) then
-         write(6,*)'Convergence failure'
-      end if
     end do
-  end subroutine iteration
+  end subroutine AofDeltaG
+
+  subroutine writedensity(deltaG)
+    use constant, only : kB
+    implicit none
+    real(kind=fp_kind) :: deltaG(NumW)
+    real(kind=fp_kind) :: g(NumW)
+    real(kind=fp_kind) :: f(NumW)
+    real(kind=fp_kind) :: unbiasedDensity(NumB)
+    real(kind=fp_kind) :: logUnbiasedDensity(NumB)
+    integer(kind=4) :: totalHistogram(NumB)
+    real(kind=fp_kind) :: denominator(NumB)
+    integer(kind=4) :: indexB, indexW
+    
+    g(1) = 0.d0
+    do indexB = 2, NumB
+      g(indexB) = g(indexB-1) + deltaG(indexB-1)
+    end do 
+
+    f = exp(g)
+
+    totalHistogram = 0 
+    do indexB = 1, NumB
+      do indexW = 1, NumW
+        totalHistogram(indexB) = totalHistogram(indexB) & 
+                             & + simulations(indexW)%bins(indexB)%histogram
+      end do
+    end do
+
+    do indexB = 1, NumB
+      denominator(indexB) = 0.d0
+      do indexW = 1, nSimulation
+        denominator(indexB) = denominator(indexB) + &
+           & simulations(indexW)%nEffectivenSnapshots * f(indexW) * &
+           & simulations(indexW)%bins(indexB)%biasingFactor
+      end do
+    end do
+    unbiasedDensity = totalHistogram / denominator
+
+    logUnbiasedDensity = - kB * T_target * log(unbiasedDensity)
+    logUnbiasedDensity = logUnbiasedDensity - minval(logUnbiasedDensity)
+    write(99,'(2F10.4)')(reactCoordBin(indexB, 1)%binRC, logUnbiasedDensity(indexB), indexB = 1, NumB)
+
+  end subroutine writedensity
 end module WHAM
