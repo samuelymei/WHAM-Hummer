@@ -81,7 +81,7 @@ contains
     iprint(1) = 1
     iprint(2) = 0
     eps = 1.0D-4
-    xtoL = 1.D-8
+    xtoL = 1.D-14
     iflag = 0
     deltaG = 0.d0
     do iIteration = 1, MaxITS
