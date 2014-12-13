@@ -1,5 +1,6 @@
 module simulation
   use precision_m
+  use control
   use snapshot
   use react_coord_bin
   use bin
@@ -14,26 +15,28 @@ module simulation
     type ( bin_info ), pointer :: bins(:)
   end type simulation_info
   type ( simulation_info ), allocatable, public :: simulations(:) ! to save the information of all the simulations
+
   real(kind=fp_kind) :: energyMin, energyMax
-  public :: readSimulationInfo, deleteSimulationInfo, initBins
+
+  public :: readSimulationInfo, deleteSimulationInfo, initBins, simulation_info
 
 contains
 
-  subroutine readSimulationInfo(fid)
+  subroutine readSimulationInfo(fdataid)
     use constant, only : kB
     implicit none
-    integer(kind=4), intent(in) :: fid
+    integer(kind=4), intent(in) :: fdataid
     real(kind=fp_kind) :: simulationTemperature
     integer(kind=4) :: indexW, indexS
     allocate(simulations(nSimulation))
     do indexW = 1, nSimulation
-      read(fid, *) simulationTemperature, simulations(indexW)%nSnapshots
+      read(fdataid, *) simulationTemperature, simulations(indexW)%nSnapshots
       simulations(indexW)%beta = 1.d0 / ( kB * simulationTemperature )
-      write(6,'(A,I3,A,F10.6,A,I10)') ' Simulation ', indexW, ':    beta = ', simulations(indexW)%beta, &
+      if(debugLevel > 0) write(6,'(A,I3,A,F10.6,A,I10)') ' Simulation ', indexW, ':    beta = ', simulations(indexW)%beta, &
          & ', Number of snapshots:', simulations(indexW)%nSnapshots
       allocate(simulations(indexW)%snapshots(simulations(indexW)%nSnapshots))
       do indexS = 1, simulations(indexW)%nSnapshots
-        read(fid,*) simulations(indexW)%snapshots(indexS)%jReactCoordBin, & 
+        read(fdataid,*) simulations(indexW)%snapshots(indexS)%jReactCoordBin, & 
                   & simulations(indexW)%snapshots(indexS)%energyUnbiased
       end do
     end do
@@ -62,7 +65,7 @@ contains
            & energyMax = simulations(indexW)%snapshots(indexS)%energyUnbiased
       end do
     end do
-    write(6,'(A,G12.5,A,G12.5)')'Energy range: ', energyMin, '~', energyMax
+    if(debugLevel > 0) write(6,'(A,G12.5,A,G12.5)')'Energy range: ', energyMin, '~', energyMax
   end subroutine energyMinMax
 
   subroutine initBins(NumRCbin, NumEbin, NumBin, T_target)
@@ -87,14 +90,14 @@ contains
     end do
 
     NumBin = NumRCbin * NumEbin
-    write(6,*)'     NumRCbin      NumEbin      NumBin     nSimulation '
-    write(6,*)NumRCbin, NumEbin, NumBin, nSimulation
+    if(debugLevel > 0)write(6,*)'     NumRCbin      NumEbin      NumBin     nSimulation '
+    if(debugLevel > 0)write(6,*)NumRCbin, NumEbin, NumBin, nSimulation
     do indexW = 1, nSimulation
       allocate(simulations(indexW)%bins(NumBin))
     end do
 
     beta_target = 1.d0 / (kB*T_target)
-    write(6,'(A,F10.6)') 'Beta of the target temperature:', beta_target
+    if(debugLevel > 0) write(6,'(A,F10.6)') 'Beta of the target temperature:', beta_target
 
     indexB = 0
     do indexRCbin = 1, NumRCbin
@@ -112,7 +115,7 @@ contains
         end do
       end do
     end do
-    print*,'call buildHistogram'
+    if(debugLevel > 1) write(*,'(A)') 'call buildHistogram'
     call buildHistogram(NumRCbin, NumEbin, NumBin)
   end subroutine initBins
 
@@ -151,7 +154,7 @@ contains
         end if
       end do
       simulations(indexW)%nEffectivenSnapshots = sum(simulations(indexW)%bins(:)%histogram)
-      write(6,'(A,I4,A,I10)')'Effective number of snapshots in simulation', indexW, ':', &
+      if(debugLevel > 0) write(6,'(A,I4,A,I10)')'Effective number of snapshots in simulation', indexW, ':', &
         & simulations(indexW)%nEffectivenSnapshots
     end do
   end subroutine buildHistogram
