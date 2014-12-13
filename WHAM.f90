@@ -69,9 +69,11 @@ contains
   subroutine calculatePMF()
     if(debugLevel > 1) write(6,'(A)') 'call initBins'
     call initBins(NumJ, NumK, NumB, T_target)
+
     if(allocated(logUnbiasedDensity))deallocate(logUnbiasedDensity)
     allocate(logUnbiasedDensity(NumB))
-    if(debugLevel > 1) write(6,'(A)') 'iteration'
+
+    if(debugLevel > 1) write(6,'(A)') 'call iteration'
     call iteration
   end subroutine calculatePMF
 
@@ -87,13 +89,17 @@ contains
     real(kind=fp_kind), allocatable :: expectValueBootstrap(:), GStandardErrBootstrap(:)
     real(kind=fp_kind), allocatable :: iLogUnbiasedDensityBootstrap(:)
     real(kind=fp_kind) :: expectValue, standardErr
-    debugLevel = 0
+    real(kind=fp_kind), allocatable :: logUnbiasedDensityOrigin(:)
+    if(debugLevel>1)write(*,'(A)')'Begin bootstrapping'
+    if(debugLevel == 1) debugLevel = 0
 ! copy simulations to simulationsOrigin
     allocate(simulationsOrigin(nSimulation))
     allocate(logUnbiasedDensityBootstrap(NumB,NumBootstrap))
     allocate(expectValueBootstrap(NumB))
     allocate(GStandardErrBootstrap(NumB))
     allocate(iLogUnbiasedDensityBootstrap(NumBootstrap))
+    allocate(logUnbiasedDensityOrigin(NumB))
+    logUnbiasedDensityOrigin = logUnbiasedDensity
     do indexW = 1, nSimulation
       simulationsOrigin(indexW)%nSnapshots = simulations(indexW)%nSnapshots
       simulationsOrigin(indexW)%beta = simulations(indexW)%beta
@@ -103,10 +109,20 @@ contains
       simulationsOrigin(indexW)%snapshots(:)%energyUnbiased = &
             & simulations(indexW)%snapshots(:)%energyUnbiased
     end do
+
     do indexBootstrap = 1, NumBootstrap
+
+      do indexW = 1, nSimulation
+        nullify(simulations(indexW)%snapshots)
+        nullify(simulations(indexW)%bins)
+      end do
+      deallocate(simulations)
+      allocate(simulations(nSimulation))
+
       do indexW = 1, nSimulation
         simulations(indexW)%nSnapshots = simulationsOrigin(indexW)%nSnapshots
         simulations(indexW)%beta = simulationsOrigin(indexW)%beta
+        allocate(simulations(indexW)%snapshots(simulations(indexW)%nSnapshots))
         do indexS = 1, simulations(indexW)%nSnapshots
           iPointerSnapshot = int(myrand()*simulations(indexW)%nSnapshots) + 1
           simulations(indexW)%snapshots(indexS)%jReactCoordBin = &
@@ -115,8 +131,10 @@ contains
               & simulationsOrigin(indexW)%snapshots(iPointerSnapshot)%energyUnbiased
         end do
       end do   
-      call calculatePMF
-      logUnbiasedDensityBootstrap(:,indexBootstrap)=logUnbiasedDensity(:)
+      if(debugLevel > 1) write(*,'(A)') 'call calculatePMF'
+      call calculatePMF()
+
+      logUnbiasedDensityBootstrap(:,indexBootstrap) = logUnbiasedDensity(:)
     end do
     do indexB = 1, NumB
       iLogUnbiasedDensityBootstrap(:) = logUnbiasedDensityBootstrap(indexB,:)
@@ -124,13 +142,14 @@ contains
       expectValueBootstrap(indexB) = expectValue
       GStandardErrBootstrap(indexB) = standardErr
     end do
-    write(idOutputFile, '(4F10.4)')(reactCoordBin(indexB, 1)%binRC, logUnbiasedDensity(indexB), &
+    write(idOutputFile, '(4F10.4)')(reactCoordBin(indexB, 1)%binRC, logUnbiasedDensityOrigin(indexB), &
             & expectValueBootstrap(indexB), GStandardErrBootstrap(indexB), indexB = 1, NumB)
     deallocate(simulationsOrigin)
     deallocate(logUnbiasedDensityBootstrap)
     deallocate(expectValueBootstrap)
     deallocate(GStandardErrBootstrap)
     deallocate(iLogUnbiasedDensityBootstrap)
+    deallocate(logUnbiasedDensityOrigin)
   end subroutine bootstrap
 
   subroutine finalizeWHAM
@@ -246,6 +265,7 @@ contains
     real(kind=fp_kind) :: denominator(NumB)
     integer(kind=4) :: indexB, indexW
     
+
     g(1) = 0.d0
     do indexB = 2, NumB
       g(indexB) = g(indexB-1) + deltaG(indexB-1)
@@ -273,6 +293,5 @@ contains
 
     logUnbiasedDensity = - kB * T_target * log(unbiasedDensity)
     logUnbiasedDensity = logUnbiasedDensity - minval(logUnbiasedDensity)
-
   end subroutine deltaG2G
 end module WHAM
