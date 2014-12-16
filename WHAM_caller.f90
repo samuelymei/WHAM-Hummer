@@ -84,7 +84,7 @@ program WHAM_caller
   foutputid = 11
   open(fmetaid, file = metafile, status = 'OLD')
   open(foutputid, file = outputfile)
-  call startWHAM( fmetaid, foutputid, tolerance, iBootstrap)
+  call startWHAM( fmetaid, foutputid, temperature, tolerance, iBootstrap)
   call finalizeWHAM
   close(fmetaid)
   close(foutputid)
