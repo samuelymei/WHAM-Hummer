@@ -39,15 +39,16 @@ module WHAM
 
   public :: startWHAM, finalizeWHAM
 contains
-  subroutine startWHAM(fdataid, foutid, temperature, tol, iBootstrap)
+  subroutine startWHAM(fdataid, foutid, temperature, tol, iBootstrap, nBootstrap)
     implicit none
     integer(kind=4), intent(in) :: fdataid
     integer(kind=4), intent(in) :: foutid
     real(kind=fp_kind), intent(in) :: temperature, tol
-    integer(kind=4), intent(in) :: iBootstrap
+    integer(kind=4), intent(in) :: iBootstrap, nBootstrap
     idOutputFile = foutid
     T_target = temperature
     tolerance = tol
+    NumBootstrap = nBootstrap
     read(fdataid,*)NumW, NumJ, NumK
     write(6,'(A,I6)')'Number of simulations:', NumW
     write(6,'(A,I6)')'Number of reaction coordinate bins:', NumJ
