@@ -14,6 +14,7 @@ program WHAM_caller
   integer(kind=4) :: iBootstrap
   character(len=200):: thisProgram
   character(len=255) :: cmd
+  integer(kind=4) :: istatus
   logical :: enoughArg
   call initialControlOpt(temperature, tolerance, iBootstrap, nBootstrap, metafile, outputfile)
   call get_command(cmd)
@@ -27,59 +28,46 @@ program WHAM_caller
     call get_command_argument(iarg, arg)
     if ( arg == '-s' .or. arg == '-S' ) then
       iBootstrap = 1
-      if( .not. enoughArg(narg, iarg+1) ) then
-        write(*,'(A)') command_help
-        stop
-      end if
-      iarg = iarg + 1
-      call get_command_argument(iarg, arg)
+      if( .not. enoughArg(narg, iarg+1) ) call quitme(command_help)
+      call getnextarg( iarg, arg, istatus )
+      if( istatus /= 0 ) call quitme(command_help)
       read(arg, *) nBootstrap
+
     else if ( arg == '-d' ) then
-      if( .not. enoughArg(narg, iarg+1) ) then
-        write(*,'(A)') command_help
-        stop
-      end if
-      iarg = iarg + 1
-      call get_command_argument(iarg, arg)
+      if( .not. enoughArg(narg, iarg+1) ) call quitme(command_help)
+      call getnextarg( iarg, arg, istatus )
+      if( istatus /= 0 ) call quitme(command_help)
       read(arg, *) debugLevel
+
     else if( arg == '-T' ) then
-      if( .not. enoughArg(narg, iarg+1) ) then
-        write(*,'(A)') command_help
-        stop
-      end if
-      iarg = iarg + 1
-      call get_command_argument(iarg, arg)
+      if( .not. enoughArg(narg, iarg+1) ) call quitme(command_help)
+      call getnextarg( iarg, arg, istatus )
+      if( istatus /= 0 ) call quitme(command_help)
       read(arg,*) temperature
+
     else if( arg == '-t' ) then
-      if( .not. enoughArg(narg, iarg+1) ) then
-        write(*,'(A)') command_help
-        stop
-      end if
-      iarg = iarg + 1
-      call get_command_argument(iarg, arg)
+      if( .not. enoughArg(narg, iarg+1) ) call quitme(command_help)
+      call getnextarg( iarg, arg, istatus )
+      if( istatus /= 0 ) call quitme(command_help)
       read(arg,*) tolerance
+
     else if( arg == '-f' ) then
-      if( .not. enoughArg(narg, iarg+1) ) then
-        write(*,'(A)') command_help
-        stop
-      end if
-      iarg = iarg + 1
-      call get_command_argument(iarg, arg)
-      metafile = arg
+      if( .not. enoughArg(narg, iarg+1) ) call quitme(command_help)
+      call getnextarg( iarg, arg, istatus )
+      if( istatus /= 0 ) call quitme(command_help)
+      metafile = trim(arg)
+
     else if( arg == '-o' ) then
-      if( .not. enoughArg(narg, iarg+1) ) then
-        write(*,'(A)') command_help
-        stop
-      end if
-      iarg = iarg + 1
-      call get_command_argument(iarg, arg)
-      outputfile = arg
+      if( .not. enoughArg(narg, iarg+1) ) call quitme(command_help)
+      call getnextarg( iarg, arg, istatus )
+      if( istatus /= 0 ) call quitme(command_help)
+      outputfile = trim(arg)
+
     else if( arg == '-h' .or. arg == '-H' ) then
-      write(*,'(A)') command_help
-      stop
+      call quitme(command_help)
+
     else
-      write(*,'(A)') command_help
-      stop
+      call quitme(command_help)
     end if
     iarg = iarg + 1
   end do
@@ -87,6 +75,11 @@ program WHAM_caller
   write(*,'(A,F10.3)')'Target temperature:', temperature
   write(*,'(A,E10.3)')'Tolerance:', tolerance
   write(*,'(A,A)') 'Metafile: ', metafile
+  if(iBootstrap == 1) then
+    write(*,'(A,1X,I5,A)') 'Do bootstrap:', nBootstrap, ' Times'
+  else
+    write(*,'(A)') 'Do bootstrap: No'
+  end if
   write(*,*)
   fmetaid = 10
   foutputid = 11
@@ -98,6 +91,15 @@ program WHAM_caller
   close(foutputid)
 end program WHAM_caller
 
+subroutine getnextarg( iarg, arg, istatus )
+  implicit none
+  integer(kind=4), intent(in out) :: iarg
+  character(len=*), intent(out) :: arg
+  integer(kind=4), intent(out) :: istatus
+  iarg = iarg + 1
+  call get_command_argument( iarg, arg, status=istatus )
+end subroutine getnextarg
+
 function enoughArg( narg, nargInNeed )
   implicit none
   logical :: enoughArg
@@ -106,6 +108,13 @@ function enoughArg( narg, nargInNeed )
   if( narg < nargInNeed ) enoughArg = .false.
   return
 end function enoughArg
+
+subroutine quitme(commandline)
+  implicit none
+  character(len=*) :: commandline
+  write(*,'(A)') commandline
+  stop
+end subroutine quitme
 
 subroutine initialControlOpt( temperature, tolerance, iBootstrap, nBootstrap, metafile, outputfile)
   use precision_m
