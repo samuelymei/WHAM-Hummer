@@ -36,6 +36,8 @@ module WHAM
   integer(kind=4) :: indexB ! index of combined Bin
 
   real(kind=fp_kind), allocatable :: logUnbiasedDensity(:)
+ 
+  integer(kind=4), allocatable :: totalHistogram(:)
 
   public :: startWHAM, finalizeWHAM
 contains
@@ -76,6 +78,7 @@ contains
     allocate(logUnbiasedDensity(NumJ))
 
     if(debugLevel > 1) write(6,'(A)') 'call iteration'
+    call calculateTotalHistogram
     call iteration
   end subroutine calculatePMF
 
@@ -158,6 +161,7 @@ contains
   subroutine finalizeWHAM
     implicit none
     if(allocated(logUnbiasedDensity))deallocate(logUnbiasedDensity)
+    if(allocated(totalHistogram))deallocate(totalHistogram)
     call deleteReactCoordBinInfo
     call deleteSimulationInfo
   end subroutine finalizeWHAM
@@ -207,7 +211,6 @@ contains
     real(kind=fp_kind), intent(out) :: aCap, dAcapdDeltaG(NumW-1)
     integer(kind=4) :: indexB, indexW
     integer(kind=4) :: indexW2
-    integer(kind=4) :: totalHistogram(NumB)
     real(kind=fp_kind) :: g(NumW)
     real(kind=fp_kind) :: denominator(NumB)
     real(kind=fp_kind) :: sumOfFraction
@@ -216,14 +219,6 @@ contains
     do indexW = 2, NumW
       g(indexW) = g(indexW-1) + deltaG(indexW-1)
     end do 
-
-    totalHistogram = 1
-    do indexB = 1, NumB
-      do indexW = 1, NumW
-        totalHistogram(indexB) = totalHistogram(indexB) & 
-                             & + simulations(indexW)%bins(indexB)%histogram
-      end do
-    end do
 
     denominator = 0.d0
     do indexB = 1, NumB
@@ -265,7 +260,6 @@ contains
     real(kind=fp_kind) :: g(NumW)
     real(kind=fp_kind) :: f(NumW)
     real(kind=fp_kind) :: unbiasedDensity(NumB)
-    integer(kind=4) :: totalHistogram(NumB)
     real(kind=fp_kind) :: denominator(NumB)
     integer(kind=4) :: indexB, indexW
     
@@ -276,14 +270,6 @@ contains
     end do 
 
     f = exp(g) 
-
-    totalHistogram = 1
-    do indexB = 1, NumB
-      do indexW = 1, NumW
-        totalHistogram(indexB) = totalHistogram(indexB) & 
-                             & + simulations(indexW)%bins(indexB)%histogram
-      end do
-    end do
 
     do indexB = 1, NumB
       denominator(indexB) = 0.d0
@@ -298,4 +284,17 @@ contains
     logUnbiasedDensity = - kB * T_target * log(unbiasedDensity)
     logUnbiasedDensity = logUnbiasedDensity - minval(logUnbiasedDensity)
   end subroutine deltaG2G
+
+  subroutine calculateTotalHistogram
+    implicit none
+    if(allocated(totalHistogram))deallocate(totalHistogram)
+    allocate(totalHistogram(NumB))
+    totalHistogram = 1
+    do indexB = 1, NumB
+      do indexW = 1, NumW
+        totalHistogram(indexB) = totalHistogram(indexB) &
+                             & + simulations(indexW)%bins(indexB)%histogram
+      end do
+    end do
+  end subroutine calculateTotalHistogram
 end module WHAM
