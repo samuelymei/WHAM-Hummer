@@ -141,7 +141,7 @@ contains
                     & simulations(indexW)%bins(iTemp)%energy ) <= &
                       simulations(indexW)%bins(iTemp)%energyBinWidth / 2.d0 ) then
               indexEbin = iTemp
-              cycle
+              exit
             end if
           end do
         end if

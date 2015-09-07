@@ -10,7 +10,7 @@ program WHAM_caller
   integer(kind=4) :: nBootstrap
   real(kind=fp_kind) :: tolerance
   real(kind=fp_kind) :: temperature
-  character(len=200) :: command_help
+  character(len=400) :: command_help
   integer(kind=4) :: iBootstrap
   character(len=200):: thisProgram
   character(len=255) :: cmd
@@ -19,7 +19,16 @@ program WHAM_caller
   call initialControlOpt(temperature, tolerance, iBootstrap, nBootstrap, metafile, outputfile)
   call get_command(cmd)
   call get_command_argument(0, thisProgram)
-  command_help = 'Usage: '//trim(thisProgram)//" [-s nBootstrap] [-d debugLevel] -T temperature -t tolerance -f metafile -o outputfile -h"
+  command_help = 'Usage: '//trim(thisProgram)//' [-s nBootstrap] [-d debugLevel] [-T temperature] [-t tolerance] [-f metafile] [-o outputfile] [-h]'&
+              &  //NEW_LINE('A')//'  Default:'&
+              &  //NEW_LINE('A')//'    nBootstrap = 0' &
+              &  //NEW_LINE('A')//'    debugLevel = 1' &
+              &  //NEW_LINE('A')//'    temperature = 300.0' &
+              &  //NEW_LINE('A')//'    tolerance = 1.D-3' &
+              &  //NEW_LINE('A')//'    metafile = metafile' &
+              &  //NEW_LINE('A')//'    outputfile = wham.out'
+
+
   narg = command_argument_count()
   iarg = 1
   iBootstrap = 0
@@ -27,11 +36,11 @@ program WHAM_caller
   do while (iarg <= narg)
     call get_command_argument(iarg, arg)
     if ( arg == '-s' .or. arg == '-S' ) then
-      iBootstrap = 1
       if( .not. enoughArg(narg, iarg+1) ) call quitme(command_help)
       call getnextarg( iarg, arg, istatus )
       if( istatus /= 0 ) call quitme(command_help)
       read(arg, *) nBootstrap
+      if(nBootstrap > 0) iBootstrap = 1
 
     else if ( arg == '-d' ) then
       if( .not. enoughArg(narg, iarg+1) ) call quitme(command_help)
@@ -123,7 +132,7 @@ subroutine initialControlOpt( temperature, tolerance, iBootstrap, nBootstrap, me
   real(kind=fp_kind), intent(out) :: temperature, tolerance
   character(len=*), intent(out) :: metafile, outputfile
   temperature = 300.d0
-  tolerance = 1.D-4
+  tolerance = 1.D-3
   iBootstrap = 0
   nBootstrap = 0
   metafile = 'metafile'

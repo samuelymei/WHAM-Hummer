@@ -3,8 +3,8 @@
 ! and temperature replica exchange molecular dynamics simualtion                              !
 ! Written by                                                                                  !
 !                                        Ye Mei                                               !
-!                                      11/17/2014                                             !
 !                           East China Normal University                                      !
+!                                      11/17/2014                                             !
 ! Reference:                                                                                  !
 !      J. Comput. Chem. 33, 453-465 (2012)                                                    !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  
@@ -54,7 +54,7 @@ contains
     write(6,'(A,I6)')'Number of reaction coordinate bins:', NumJ
     write(6,'(A,I6)')'Number of energy bins:', NumK
     write(6,'(A,F10.3)')'Target temperature:', T_target
-    write(6,'(A,F10.3)')'Convergence criterion:', tolerance
+    write(6,'(A,E10.3)')'Convergence criterion:', tolerance
     if(debugLevel > 1) write(6,'(A)') 'call readReactCoordBinInfo'
     call readReactCoordBinInfo(fdataid, NumW, NumJ)
     nSimulation = NumW
@@ -64,7 +64,7 @@ contains
     if( iBootstrap == 1 ) then
       call bootstrap()
     else
-      write(idOutputFile,'(2F10.4)')(reactCoordBin(indexB, 1)%binRC, logUnbiasedDensity(indexB), indexB = 1, NumB)
+      write(idOutputFile,'(2F10.4)')(reactCoordBin(indexJ, 1)%binRC, logUnbiasedDensity(indexJ), indexJ = 1, NumJ)
     end if
   end subroutine startWHAM
 
@@ -73,7 +73,7 @@ contains
     call initBins(NumJ, NumK, NumB, T_target)
 
     if(allocated(logUnbiasedDensity))deallocate(logUnbiasedDensity)
-    allocate(logUnbiasedDensity(NumB))
+    allocate(logUnbiasedDensity(NumJ))
 
     if(debugLevel > 1) write(6,'(A)') 'call iteration'
     call iteration
@@ -88,9 +88,9 @@ contains
     type(simulation_info), allocatable :: simulationsOrigin(:)
     real(kind=fp_kind) :: myrand
     real(kind=fp_kind), allocatable :: logUnbiasedDensityBootstrap(:,:)
-    real(kind=fp_kind), allocatable :: expectValueBootstrap(:), GStandardErrBootstrap(:)
+    real(kind=fp_kind), allocatable :: expectValueBootstrap(:), GStandardDevBootstrap(:)
     real(kind=fp_kind), allocatable :: iLogUnbiasedDensityBootstrap(:)
-    real(kind=fp_kind) :: expectValue, standardErr
+    real(kind=fp_kind) :: expectValue, standardErr, standardDev
     real(kind=fp_kind), allocatable :: logUnbiasedDensityOrigin(:)
     if(debugLevel>1)write(*,'(A)')'Begin bootstrapping'
     if(debugLevel == 1) debugLevel = 0
@@ -98,7 +98,7 @@ contains
     allocate(simulationsOrigin(nSimulation))
     allocate(logUnbiasedDensityBootstrap(NumB,NumBootstrap))
     allocate(expectValueBootstrap(NumB))
-    allocate(GStandardErrBootstrap(NumB))
+    allocate(GStandardDevBootstrap(NumB))
     allocate(iLogUnbiasedDensityBootstrap(NumBootstrap))
     allocate(logUnbiasedDensityOrigin(NumB))
     logUnbiasedDensityOrigin = logUnbiasedDensity
@@ -140,16 +140,17 @@ contains
     end do
     do indexB = 1, NumB
       iLogUnbiasedDensityBootstrap(:) = logUnbiasedDensityBootstrap(indexB,:)
-      call Mean_and_StandardErr(NumBootstrap,iLogUnbiasedDensityBootstrap,expectValue,standardErr)
+!      call Mean_and_StandardErr(NumBootstrap,iLogUnbiasedDensityBootstrap,expectValue,standardErr)
+      call Mean_and_StandardDev(NumBootstrap,iLogUnbiasedDensityBootstrap,expectValue,standardDev)
       expectValueBootstrap(indexB) = expectValue
-      GStandardErrBootstrap(indexB) = standardErr
+      GStandardDevBootstrap(indexB) = standardDev
     end do
     write(idOutputFile, '(4F10.4)')(reactCoordBin(indexB, 1)%binRC, logUnbiasedDensityOrigin(indexB), &
-            & expectValueBootstrap(indexB), GStandardErrBootstrap(indexB), indexB = 1, NumB)
+            & expectValueBootstrap(indexB), GStandardDevBootstrap(indexB), indexB = 1, NumB)
     deallocate(simulationsOrigin)
     deallocate(logUnbiasedDensityBootstrap)
     deallocate(expectValueBootstrap)
-    deallocate(GStandardErrBootstrap)
+    deallocate(GStandardDevBootstrap)
     deallocate(iLogUnbiasedDensityBootstrap)
     deallocate(logUnbiasedDensityOrigin)
   end subroutine bootstrap
@@ -165,35 +166,36 @@ contains
     use constant, only : kB
     implicit none
     integer(kind=4) :: iIteration
-    real(kind=fp_kind) :: deltaG(NumB)
+    real(kind=fp_kind) :: deltaG(NumW-1)
     real(kind=fp_kind) :: aCap
-    real(kind=fp_kind) :: dAcapdDeltaG(NumB)
+    real(kind=fp_kind) :: dAcapdDeltaG(NumW-1)
     real(kind=fp_kind) :: eps, xtol
     integer(kind=4) :: iprint(2)
     integer(kind=4) :: iflag
     logical :: diagco
-    real(kind=fp_kind) :: DIAG(NumW)
+    real(kind=fp_kind) :: DIAG(NumW-1)
     integer(kind=4), parameter :: Mcorrection = 5
     real(kind=fp_kind) :: w((NumW+1)*(2*Mcorrection+1))
     external LB2
     diagco = .false.
     iprint(1) = 0
     iprint(2) = 0
-    eps = 1.0D-4
+    eps = 1.0D-2
     xtoL = 1.D-14
     iflag = 0
     deltaG = 0.d0
     do iIteration = 1, MaxITS
-      if(debugLevel > 0) write(*,'(A, I)') 'Iteration', iIteration
+      if(debugLevel > 0) write(*,'(A, I5)') 'Iteration', iIteration
       call AofDeltaG( deltaG, aCap, dAcapdDeltaG )
-      if(debugLevel > 1) write(*,'(A, F10.4)') 'aCap=', aCap
-      if(debugLevel > 1) write(*,'(8F10.3)') dAcapdDeltaG
+      if(debugLevel > 1) write(*,'(A, E20.8)') 'aCap=', aCap
+      if(debugLevel > 1) write(*,'(8E12.3)') dAcapdDeltaG
       if(debugLevel > 1) then
         iprint(1) = 1
         iprint(2) = 0
       end if
-      call LBFGS(NumW, Mcorrection, deltaG, aCap, dAcapdDeltaG, diagco, diag, iprint, eps, xtoL, w, iflag)
+      call LBFGS(NumW-1, Mcorrection, deltaG, aCap, dAcapdDeltaG, diagco, diag, iprint, eps, xtoL, w, iflag)
       if(iflag<=0)exit
+      write(444,'(12F10.5)')deltaG
       if(iIteration == MaxITS)write(*,'(A)') 'Max number of iterations has been reached'
     end do
     call deltaG2G(deltaG)
@@ -201,8 +203,8 @@ contains
 
   subroutine AofDeltaG( deltaG, aCap, dAcapdDeltaG )
     implicit none
-    real(kind=fp_kind), intent(in) :: deltaG(NumW)
-    real(kind=fp_kind), intent(out) :: aCap, dAcapdDeltaG(NumW)
+    real(kind=fp_kind), intent(in) :: deltaG(NumW-1)
+    real(kind=fp_kind), intent(out) :: aCap, dAcapdDeltaG(NumW-1)
     integer(kind=4) :: indexB, indexW
     integer(kind=4) :: indexW2
     integer(kind=4) :: totalHistogram(NumB)
@@ -211,11 +213,11 @@ contains
     real(kind=fp_kind) :: sumOfFraction
 
     g(1) = 0.d0
-    do indexB = 2, NumB
-      g(indexB) = g(indexB-1) + deltaG(indexB-1)
+    do indexW = 2, NumW
+      g(indexW) = g(indexW-1) + deltaG(indexW-1)
     end do 
 
-    totalHistogram = 0 
+    totalHistogram = 1
     do indexB = 1, NumB
       do indexW = 1, NumW
         totalHistogram(indexB) = totalHistogram(indexB) & 
@@ -259,7 +261,7 @@ contains
   subroutine deltaG2G(deltaG)
     use constant, only : kB
     implicit none
-    real(kind=fp_kind) :: deltaG(NumW)
+    real(kind=fp_kind) :: deltaG(NumW-1)
     real(kind=fp_kind) :: g(NumW)
     real(kind=fp_kind) :: f(NumW)
     real(kind=fp_kind) :: unbiasedDensity(NumB)
@@ -269,13 +271,13 @@ contains
     
 
     g(1) = 0.d0
-    do indexB = 2, NumB
-      g(indexB) = g(indexB-1) + deltaG(indexB-1)
+    do indexW = 2, NumW
+      g(indexW) = g(indexW-1) + deltaG(indexW-1)
     end do 
 
-    f = exp(g)
+    f = exp(g) 
 
-    totalHistogram = 0 
+    totalHistogram = 1
     do indexB = 1, NumB
       do indexW = 1, NumW
         totalHistogram(indexB) = totalHistogram(indexB) & 
