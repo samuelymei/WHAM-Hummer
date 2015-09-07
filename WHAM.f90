@@ -205,7 +205,7 @@ contains
     diagco = .false.
     iprint(1) = 0
     iprint(2) = 0
-    eps = 1.0D-3
+    eps = 1.0D-8
     xtoL = 1.D-13
     iflag = 0
     deltaG = -1.0d0
@@ -220,7 +220,6 @@ contains
       end if
       call LBFGS(NumW-1, Mcorrection, deltaG, aCap, dAcapdDeltaG, diagco, diag, iprint, eps, xtoL, w, iflag)
       if(iflag<=0)exit
-      write(444,'(12F10.5)')deltaG
       if(iIteration == MaxITS)write(*,'(A)') 'Max number of iterations has been reached'
     end do
     call deltaG2G(deltaG)
