@@ -34,7 +34,6 @@
 12    continue
       stpmax=STPMX*max(sqrt(sum),float(n))
       do 27 its=1,ITMAX
-        write(444,'(12E15.6)')p
         iter=its
         call lnsrch(n,p,fp,g,xi,pnew,fret,stpmax,check,func)
         fp=fret
