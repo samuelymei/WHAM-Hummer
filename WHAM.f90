@@ -64,6 +64,7 @@ contains
     if(debugLevel > 1) write(6,'(A)') 'call readSimulationInfo'
     call readSimulationInfo(fdataid)
     call calculatePMF()
+    print*,'iBootstrap=',iBootstrap
     if( iBootstrap == 1 ) then
       call bootstrap()
     else
@@ -85,8 +86,6 @@ contains
   end subroutine calculatePMF
 
   subroutine bootstrap()
-    use precision_m
-    use simulation
     implicit none
     integer(kind=4) :: indexBootstrap
     integer(kind=4) :: iPointerSnapshot
@@ -97,15 +96,15 @@ contains
     real(kind=fp_kind), allocatable :: iLogUnbiasedDensityBootstrap(:)
     real(kind=fp_kind) :: expectValue, standardErr, standardDev
     real(kind=fp_kind), allocatable :: logUnbiasedDensityOrigin(:)
-    if(debugLevel>1)write(*,'(A)')'Begin bootstrapping'
+    if(debugLevel > 1)write(*,'(A)')'Begin bootstrapping'
     if(debugLevel == 1) debugLevel = 0
 ! copy simulations to simulationsOrigin
     allocate(simulationsOrigin(nSimulation))
-    allocate(logUnbiasedDensityBootstrap(NumB,NumBootstrap))
-    allocate(expectValueBootstrap(NumB))
-    allocate(GStandardDevBootstrap(NumB))
+    allocate(logUnbiasedDensityBootstrap(NumJ,NumBootstrap))
+    allocate(expectValueBootstrap(NumJ))
+    allocate(GStandardDevBootstrap(NumJ))
     allocate(iLogUnbiasedDensityBootstrap(NumBootstrap))
-    allocate(logUnbiasedDensityOrigin(NumB))
+    allocate(logUnbiasedDensityOrigin(NumJ))
     logUnbiasedDensityOrigin = logUnbiasedDensity
     do indexW = 1, nSimulation
       simulationsOrigin(indexW)%nSnapshots = simulations(indexW)%nSnapshots
@@ -118,6 +117,7 @@ contains
     end do
 
     do indexBootstrap = 1, NumBootstrap
+      write(*,'(A,I10)')'Bootstrap step:', indexBootstrap
 
       do indexW = 1, nSimulation
         nullify(simulations(indexW)%snapshots)
@@ -143,15 +143,15 @@ contains
 
       logUnbiasedDensityBootstrap(:,indexBootstrap) = logUnbiasedDensity(:)
     end do
-    do indexB = 1, NumB
-      iLogUnbiasedDensityBootstrap(:) = logUnbiasedDensityBootstrap(indexB,:)
+    do indexJ = 1, NumJ
+      iLogUnbiasedDensityBootstrap(:) = logUnbiasedDensityBootstrap(indexJ,:)
 !      call Mean_and_StandardErr(NumBootstrap,iLogUnbiasedDensityBootstrap,expectValue,standardErr)
       call Mean_and_StandardDev(NumBootstrap,iLogUnbiasedDensityBootstrap,expectValue,standardDev)
-      expectValueBootstrap(indexB) = expectValue
-      GStandardDevBootstrap(indexB) = standardDev
+      expectValueBootstrap(indexJ) = expectValue
+      GStandardDevBootstrap(indexJ) = standardDev
     end do
-    write(idOutputFile, '(4F10.4)')(reactCoordBin(indexB, 1)%binRC, logUnbiasedDensityOrigin(indexB), &
-            & expectValueBootstrap(indexB), GStandardDevBootstrap(indexB), indexB = 1, NumB)
+    write(idOutputFile, '(4F10.4)')(reactCoordBin(indexJ, 1)%binRC, logUnbiasedDensityOrigin(indexJ), &
+            & expectValueBootstrap(indexJ), GStandardDevBootstrap(indexJ), indexJ = 1, NumJ)
     deallocate(simulationsOrigin)
     deallocate(logUnbiasedDensityBootstrap)
     deallocate(expectValueBootstrap)
@@ -306,7 +306,7 @@ contains
     real(kind=fp_kind) :: unbiasedDensity(NumB)
     real(kind=fp_kind) :: denominator(NumB)
     integer(kind=4) :: indexB, indexW
-    
+    if(debugLevel > 1) write(*,'(A)')'call deltaG2G'
 
     g(1) = 0.d0
     do indexW = 2, NumW
