@@ -40,6 +40,7 @@ module WHAM
   integer(kind=4), allocatable :: totalHistogram(:)
 
   public :: startWHAM, finalizeWHAM
+  public :: getDaDg, aCap
 contains
   subroutine startWHAM(fdataid, foutid, temperature, tol, iBootstrap, nBootstrap)
     implicit none
@@ -80,6 +81,7 @@ contains
     if(debugLevel > 1) write(6,'(A)') 'call iteration'
     call calculateTotalHistogram
     call iteration
+!    call iteration2
   end subroutine calculatePMF
 
   subroutine bootstrap()
@@ -166,33 +168,52 @@ contains
     call deleteSimulationInfo
   end subroutine finalizeWHAM
 
+  subroutine iteration2
+    use constant, only : kB
+    implicit none
+    integer(kind=4) :: iIteration
+    real(kind=fp_kind) :: deltaG(NumW-1)
+    real(kind=fp_kind) :: dAcapdDeltaG(NumW-1)
+    integer(kind=4) :: iter
+    real(kind=fp_kind) :: fret
+    real(kind=fp_kind) :: gtol
+    deltaG = -1.0d0
+    gtol=1.D-8
+    fret = 0.d0
+    if(debugLevel > 1) write(*,'(A, E20.8)') 'aCap=', aCap(deltaG)
+    call getDadG(deltaG,dAcapdDeltaG)
+    if(debugLevel > 1) write(*,'(8E14.6)') dAcapdDeltaG
+    call dfpmin(deltaG,NumW-1,gtol,iter,fret,aCap,getDaDg)
+    if(debugLevel > 1) write(*,'(A,I4,A)') 'dfpmin converged in ',iter,' cycles'
+    call deltaG2G(deltaG)
+  end subroutine iteration2
+
   subroutine iteration
     use constant, only : kB
     implicit none
     integer(kind=4) :: iIteration
     real(kind=fp_kind) :: deltaG(NumW-1)
-    real(kind=fp_kind) :: aCap
     real(kind=fp_kind) :: dAcapdDeltaG(NumW-1)
     real(kind=fp_kind) :: eps, xtol
     integer(kind=4) :: iprint(2)
     integer(kind=4) :: iflag
     logical :: diagco
     real(kind=fp_kind) :: DIAG(NumW-1)
-    integer(kind=4), parameter :: Mcorrection = 5
+    integer(kind=4), parameter :: Mcorrection = 7
     real(kind=fp_kind) :: w((NumW+1)*(2*Mcorrection+1))
     external LB2
     diagco = .false.
     iprint(1) = 0
     iprint(2) = 0
-    eps = 1.0D-2
-    xtoL = 1.D-14
+    eps = 1.0D-3
+    xtoL = 1.D-13
     iflag = 0
-    deltaG = 0.d0
+    deltaG = -1.0d0
     do iIteration = 1, MaxITS
       if(debugLevel > 0) write(*,'(A, I5)') 'Iteration', iIteration
-      call AofDeltaG( deltaG, aCap, dAcapdDeltaG )
-      if(debugLevel > 1) write(*,'(A, E20.8)') 'aCap=', aCap
-      if(debugLevel > 1) write(*,'(8E12.3)') dAcapdDeltaG
+      if(debugLevel > 1) write(*,'(A, E20.8)') 'aCap=', aCap(deltaG)
+      call getDadG(deltaG,dAcapdDeltaG)
+      if(debugLevel > 1) write(*,'(8E14.6)') dAcapdDeltaG
       if(debugLevel > 1) then
         iprint(1) = 1
         iprint(2) = 0
@@ -205,16 +226,14 @@ contains
     call deltaG2G(deltaG)
   end subroutine iteration
 
-  subroutine AofDeltaG( deltaG, aCap, dAcapdDeltaG )
+  function aCap(deltaG)
     implicit none
     real(kind=fp_kind), intent(in) :: deltaG(NumW-1)
-    real(kind=fp_kind), intent(out) :: aCap, dAcapdDeltaG(NumW-1)
+    real(kind=fp_kind) :: aCap
     integer(kind=4) :: indexB, indexW
     integer(kind=4) :: indexW2
     real(kind=fp_kind) :: g(NumW)
     real(kind=fp_kind) :: denominator(NumB)
-    real(kind=fp_kind) :: sumOfFraction
-
     g(1) = 0.d0
     do indexW = 2, NumW
       g(indexW) = g(indexW-1) + deltaG(indexW-1)
@@ -238,8 +257,34 @@ contains
       aCap = aCap - totalHistogram(indexB) * &
                 & log( totalHistogram(indexB)/denominator(indexB) )
     end do
-    
-    dAcapdDeltaG = 0.d0
+
+  end function aCap
+
+  subroutine getDaDg(deltaG,dAdG)
+    implicit none
+    real(kind=fp_kind), intent(in) :: deltaG(NumW-1)
+    real(kind=fp_kind), intent(out) :: dAdG(NumW-1)
+    integer(kind=4) :: indexB, indexW
+    integer(kind=4) :: indexW2
+    real(kind=fp_kind) :: g(NumW)
+    real(kind=fp_kind) :: denominator(NumB)
+    real(kind=fp_kind) :: sumOfFraction
+
+    g(1) = 0.d0
+    do indexW = 2, NumW
+      g(indexW) = g(indexW-1) + deltaG(indexW-1)
+    end do 
+
+    denominator = 0.d0
+    do indexB = 1, NumB
+      do indexW = 1, NumW
+        denominator(indexB) = denominator(indexB) + &
+                            & simulations(indexW)%nEffectivenSnapshots * &
+                            & simulations(indexW)%bins(indexB)%biasingFactor * exp(g(indexW))
+      end do
+    end do
+
+    dAdG = 0.d0
     do indexW = 1, NumW
       do indexW2 = indexW + 1, NumW
         sumOfFraction = 0.d0
@@ -247,11 +292,11 @@ contains
           sumOfFraction = sumOfFraction + &
               & totalHistogram(indexB)*simulations(indexW2)%bins(indexB)%biasingFactor/denominator(indexB)
         end do
-        dAcapdDeltaG(indexW) = dAcapdDeltaG(indexW) + &
+        dAdG(indexW) = dAdG(indexW) + &
           & simulations(indexW2)%nEffectivenSnapshots * ( exp(g(indexW2)) * sumOfFraction - 1.d0 )
       end do
     end do
-  end subroutine AofDeltaG
+  end subroutine getDaDg
 
   subroutine deltaG2G(deltaG)
     use constant, only : kB
@@ -269,7 +314,7 @@ contains
       g(indexW) = g(indexW-1) + deltaG(indexW-1)
     end do 
 
-    f = exp(g) 
+    f = exp(g)
 
     do indexB = 1, NumB
       denominator(indexB) = 0.d0
