@@ -166,6 +166,7 @@ contains
     if(allocated(totalHistogram))deallocate(totalHistogram)
     call deleteReactCoordBinInfo
     call deleteSimulationInfo
+    write(*,'(A)')'WHAM Done'
   end subroutine finalizeWHAM
 
   subroutine iteration2
